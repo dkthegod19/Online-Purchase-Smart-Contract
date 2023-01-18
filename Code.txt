@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity >=0.7.0 <0.9.0;
+
+contract PurchaseAgreement {
+    uint public value;
+    address payable public seller;
+    address payable public buyer;
+
+    enum State { Created, Locked, Release, Inactive}
+    State public state;
+
+    constructor() payable {
+        seller = payable(msg.sender);
+        value = msg.value/2;
+    }
+    /// The function cannot be called at the current state
+    error InvalidState();
+    ///Only the buyer can call this function
+    error InvalidBuyer();
+    ///Only the seller can call this function
+    error InvalidSeller();
+
+    modifier inState(State state){
+        if(state != state){
+            revert InvalidState();
+        }
+        _;
+    }
+    
+    modifier onlyBuyer(){
+        if(msg.sender != buyer){
+            revert InvalidBuyer();
+        } 
+        _;
+    }
+
+     modifier onlySeller(){
+        if(msg.sender != seller){
+            revert InvalidSeller();
+        } 
+        _;
+    }
+    //buyer puts deposit in smart contract
+    function confirmPurchase() external inState(State.Created) payable {
+        require(msg.value == (2 * value),"Please send 2x the purchase amount");
+        buyer = payable(msg.sender);
+        state = State.Locked;
+    }
+    //buyer gets back their deposit
+    function confirmReceived() external onlyBuyer inState(State.Locked) {
+        state = State.Release;
+        buyer.transfer(value);
+
+    }
+    //seller gets his amount
+    function paySeller() external onlySeller inState(State.Release) {
+        state = State.Inactive;
+        seller.transfer(3 * value);
+    }
+
+    function abort() external onlySeller inState(State.Created) {
+        state = State.Inactive;
+        seller.transfer(address(this).balance);
+    }
+}
